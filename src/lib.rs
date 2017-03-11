@@ -1,3 +1,6 @@
+#[doc(hidden)]
+pub extern crate unreachable;
+
 use std::fmt;
 use std::mem;
 
@@ -158,13 +161,13 @@ macro_rules! make_nanbox {
                         }
                         tag += 1;
                     )+
-                    unreachable!()
+                    $crate::unreachable::unreachable()
                 }
             }
         }
 
-        impl $name {
-            pub fn into_variant(self) -> $enum_name {
+        impl Into<$enum_name> for $name {
+            fn into(self) -> $enum_name {
                 #[allow(unused_assignments)]
                 unsafe {
                     let mut expected_tag = 0;
@@ -175,8 +178,14 @@ macro_rules! make_nanbox {
                         expected_tag += 1;
                     )*
                     debug_assert!(false, "Unexpected tag {}", self.value.tag());
-                    unreachable!()
+                    $crate::unreachable::unreachable()
                 }
+            }
+        }
+
+        impl $name {
+            pub fn into_variant(self) -> $enum_name {
+                self.into()
             }
         }
     }
