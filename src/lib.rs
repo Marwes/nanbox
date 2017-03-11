@@ -229,6 +229,15 @@ mod tests {
                 TestResult::from_bool(NanBox::new(tag, v).tag() == tag as u32)
             }
         }
+
+        fn nanbox_ptr(tag: u8, v: u32) -> TestResult {
+            if tag == 0 || tag >= 8 {
+                return TestResult::discard();
+            }
+            unsafe {
+                TestResult::from_bool(NanBox::new(tag, Box::into_raw(Box::new(v))).tag() == tag as u32)
+            }
+        }
     }
 
     make_nanbox!{
