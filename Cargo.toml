@@ -3,6 +3,11 @@ name = "nanbox"
 version = "0.1.0"
 authors = ["Markus Westerlind <marwes91@gmail.com>"]
 
+description = "NaN boxing implementation"
+license = "MIT"
+repository = "https://github.com/Marwes/nanbox"
+documentation = "https://docs.rs/crate/nanbox"
+
 [dependencies]
 unreachable = "0.1.1"
 
