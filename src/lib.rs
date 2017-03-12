@@ -211,6 +211,12 @@ impl<T> Ord for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<
     }
 }
 
+impl<T> From<T> for TypedNanBox<T> where T: From<TypedNanBox<T>> {
+    fn from(value: T) -> TypedNanBox<T> {
+        value.into()
+    }
+}
+
 impl<T> TypedNanBox<T> {
     pub unsafe fn new<U>(tag: u8, value: U) -> TypedNanBox<T>
         where U: NanBoxable
@@ -220,20 +226,22 @@ impl<T> TypedNanBox<T> {
             _marker: PhantomData
         }
     }
-
-    pub fn into_variant(self) -> T where T: From<TypedNanBox<T>> {
-        self.into()
-    }
 }
 
+#[macro_export]
 macro_rules! make_nanbox {
     (
         $(#[$meta:meta])*
-        pub enum $enum_name: ident {
+        pub enum $name: ident, $enum_name: ident {
             $($field: ident ($typ: ty)),*
         }
     ) => {
         
+        $(#[$meta])*
+        pub struct $name {
+            value: TypedNanBox<$enum_name>,
+        }
+
         $(#[$meta])*
         pub enum $enum_name {
             $(
@@ -242,21 +250,23 @@ macro_rules! make_nanbox {
         }
 
         $(
-            impl From<$typ> for TypedNanBox<$enum_name> {
-                fn from(value: $typ) -> Self {
-                    TypedNanBox::from($enum_name::$field(value))
+            impl From<$typ> for $name {
+                fn from(value: $typ) -> $name {
+                    $name::from($enum_name::$field(value))
                 }
             }
         )+
 
-        impl From<$enum_name> for TypedNanBox<$enum_name> {
-            fn from(value: $enum_name) -> Self {
+        impl From<$enum_name> for $name {
+            fn from(value: $enum_name) -> $name {
                 #[allow(unused_assignments)]
                 unsafe {
                     let mut tag = 0;
                     $(
                         if let $enum_name::$field(value) = value {
-                            return $crate::TypedNanBox::new(tag, value);
+                            return $name {
+                                value: $crate::TypedNanBox::new(tag, value)
+                            };
                         }
                         tag += 1;
                     )+
@@ -265,8 +275,14 @@ macro_rules! make_nanbox {
             }
         }
 
-        impl From<TypedNanBox<$enum_name>> for $enum_name {
-            fn from(value: TypedNanBox<$enum_name>) -> $enum_name {
+        impl From<$name> for $enum_name {
+            fn from(value: $name) -> $enum_name {
+                value.value.into()
+            }
+        }
+
+        impl From<$crate::TypedNanBox<$enum_name>> for $enum_name {
+            fn from(value: $crate::TypedNanBox<$enum_name>) -> $enum_name {
                 #[allow(unused_assignments)]
                 unsafe {
                     let mut expected_tag = 0;
@@ -279,6 +295,12 @@ macro_rules! make_nanbox {
                     debug_assert!(false, "Unexpected tag {}", value.nanbox.tag());
                     $crate::unreachable::unreachable()
                 }
+            }
+        }
+
+        impl $name {
+            pub fn into_variant(self) -> $enum_name {
+                self.into()
             }
         }
     }
@@ -335,7 +357,7 @@ mod tests {
 
     make_nanbox!{
         #[derive(Clone, Debug, PartialEq)]
-        pub enum Value {
+        pub enum Value, Variant {
             Float(f64),
             Int(i32),
             Pointer(*mut ()),
@@ -345,22 +367,22 @@ mod tests {
 
     #[test]
     fn box_test() {
-        assert_eq!(TypedNanBox::from(123).into_variant(), Value::Int(123));
-        assert_eq!(TypedNanBox::from(3000 as *mut ()).into_variant(),
-                   Value::Pointer(3000 as *mut ()));
-        assert_eq!(TypedNanBox::from(3.14).into_variant(), Value::Float(3.14));
+        assert_eq!(Value::from(123).into_variant(), Variant::Int(123));
+        assert_eq!(Value::from(3000 as *mut ()).into_variant(),
+                   Variant::Pointer(3000 as *mut ()));
+        assert_eq!(Value::from(3.14).into_variant(), Variant::Float(3.14));
 
         let array = [1,2,3,4,5,6];
-        assert_eq!(TypedNanBox::from(array).into_variant(), Value::Array(array));
+        assert_eq!(Value::from(array).into_variant(), Variant::Array(array));
 
         let array = [255,255,255,255,255,255];
-        assert_eq!(TypedNanBox::from(array).into_variant(), Value::Array(array));
+        assert_eq!(Value::from(array).into_variant(), Variant::Array(array));
     }
 
     #[test]
     fn nan_box_nan() {
-        match TypedNanBox::from(f64::NAN).into_variant() {
-            Value::Float(x) => assert!(x.is_nan()),
+        match Value::from(f64::NAN).into_variant() {
+            Variant::Float(x) => assert!(x.is_nan()),
             x => panic!("Unexpected {:?}", x),
         }
     }
