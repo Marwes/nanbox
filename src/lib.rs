@@ -4,8 +4,9 @@ pub extern crate unreachable;
 use std::fmt;
 use std::mem;
 
-const DOUBLE_MAX_TAG: u32 = 0x1FFF0;
-const SHIFTED_DOUBLE_MAX_TAG: u64 = ((DOUBLE_MAX_TAG as u64) << 47) | 0xFFFFFFFF;
+const TAG_SHIFT: u64 = 48;
+const DOUBLE_MAX_TAG: u32 = 0b11111_11111_11000_0;
+const SHIFTED_DOUBLE_MAX_TAG: u64 = ((DOUBLE_MAX_TAG as u64) << TAG_SHIFT) | 0xFFFFFFFF;
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct NanBox(u64);
@@ -15,7 +16,7 @@ impl fmt::Debug for NanBox {
         write!(f,
                "NanBox {{ tag: {:?}, payload: {:?} }}",
                self.tag(),
-               self.0 & ((1 << 48) - 1))
+               self.0 & ((1 << TAG_SHIFT) - 1))
     }
 }
 
@@ -27,14 +28,14 @@ pub trait NanBoxable: Sized {
     fn pack_nan_box(self, tag: u8) -> NanBox {
         let mut b = self.into_nan_box();
 
-        let shifted_tag = ((DOUBLE_MAX_TAG as u64) | (tag as u64)) << 47;
+        let shifted_tag = ((DOUBLE_MAX_TAG as u64) | (tag as u64)) << TAG_SHIFT;
         b.0 |= shifted_tag;
         debug_assert!(b.tag() == u32::from(tag), "{} == {}", b.tag(), tag);
         b
     }
 
     unsafe fn unpack_nan_box(value: NanBox) -> Self {
-        let mask = (1 << 48) - 1;
+        let mask = (1 << TAG_SHIFT) - 1;
         let b = NanBox(value.0 & mask);
         Self::from_nan_box(b)
     }
@@ -77,6 +78,48 @@ macro_rules! impl_cast {
 
 impl_cast!{ u8 u16 u32 i8 i16 i32 }
 
+macro_rules! impl_array {
+    ($($typ: ty)+) => {
+        $(
+        impl NanBoxable for $typ {
+            unsafe fn from_nan_box(n: NanBox) -> Self {
+                use std::ptr::copy_nonoverlapping;
+                use std::mem::size_of;
+                debug_assert!(size_of::<Self>() <= 6);
+                let mut result = Self::default();
+                copy_nonoverlapping(
+                    &n as *const NanBox as *const _,
+                    result.as_mut_ptr(),
+                    result.len());
+                result
+            }
+
+            fn into_nan_box(self) -> NanBox {
+                unsafe {
+                    use std::ptr::copy_nonoverlapping;
+                    use std::mem::size_of;
+                    debug_assert!(size_of::<Self>() <= 6);
+                    let mut result = NanBox(0);
+                    copy_nonoverlapping(
+                        self.as_ptr(),
+                        &mut result as *mut NanBox as *mut _,
+                        self.len());
+                    result
+                }
+            }
+        }
+        )*
+    }
+}
+
+impl_array!{ [u8; 1] [u8; 2] [u8; 3] [u8; 4] [u8; 5] [u8; 6] }
+impl_array!{ [i8; 1] [i8; 2] [i8; 3] [i8; 4] [i8; 5] [i8; 6] }
+impl_array!{ [i16; 1] [i16; 2] [i16; 3] }
+impl_array!{ [u16; 1] [u16; 2] [u16; 3] }
+impl_array!{ [i32; 1] }
+impl_array!{ [u32; 1] }
+impl_array!{ [f32; 1] }
+
 macro_rules! impl_cast_t {
     ($param: ident, $($typ: ty)+) => {
         $(
@@ -86,7 +129,7 @@ macro_rules! impl_cast_t {
             }
 
             fn into_nan_box(self) -> NanBox {
-                debug_assert!((self as u64) >> 48 == 0);
+                debug_assert!((self as u64) >> TAG_SHIFT == 0);
                 NanBox(self as u64)
             }
         }
@@ -113,7 +156,7 @@ impl NanBox {
         if self.0 <= SHIFTED_DOUBLE_MAX_TAG {
             0
         } else {
-            (self.0 >> 47) as u32 & !DOUBLE_MAX_TAG
+            (self.0 >> TAG_SHIFT) as u32 & !DOUBLE_MAX_TAG
         }
     }
 }
@@ -245,7 +288,8 @@ mod tests {
         pub enum Value, Variant {
             Float(f64),
             Int(i32),
-            Pointer(*mut ())
+            Pointer(*mut ()),
+            Array([u8; 6])
         }
     }
 
@@ -255,6 +299,12 @@ mod tests {
         assert_eq!(Value::from(3000 as *mut ()).into_variant(),
                    Variant::Pointer(3000 as *mut ()));
         assert_eq!(Value::from(3.14).into_variant(), Variant::Float(3.14));
+
+        let array = [1,2,3,4,5,6];
+        assert_eq!(Value::from(array).into_variant(), Variant::Array(array));
+
+        let array = [255,255,255,255,255,255];
+        assert_eq!(Value::from(array).into_variant(), Variant::Array(array));
     }
 
     #[test]
@@ -268,6 +318,6 @@ mod tests {
     #[should_panic]
     #[test]
     fn invalid_pointer() {
-        ((1u64 << 48) as *const ()).into_nan_box();
+        ((1u64 << TAG_SHIFT) as *const ()).into_nan_box();
     }
 }
