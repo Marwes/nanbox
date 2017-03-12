@@ -145,6 +145,7 @@ impl NanBox {
     pub unsafe fn new<T>(tag: u8, value: T) -> NanBox
         where T: NanBoxable
     {
+        debug_assert!(tag < 1 << 4, "Nanboxes must have tags smaller than {}", 1 << 4);
         value.pack_nan_box(tag)
     }
 
