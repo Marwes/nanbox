@@ -226,6 +226,16 @@ impl<T> TypedNanBox<T> {
             _marker: PhantomData
         }
     }
+
+    pub unsafe fn unpack<U>(self) -> U
+        where U: NanBoxable
+    {
+        self.nanbox.unpack()
+    }
+
+    pub fn tag(&self) -> u32 {
+        self.nanbox.tag()
+    }
 }
 
 #[macro_export]
@@ -239,7 +249,7 @@ macro_rules! make_nanbox {
         
         $(#[$meta])*
         pub struct $name {
-            value: TypedNanBox<$enum_name>,
+            value: $crate::TypedNanBox<$enum_name>,
         }
 
         $(#[$meta])*
@@ -287,12 +297,12 @@ macro_rules! make_nanbox {
                 unsafe {
                     let mut expected_tag = 0;
                     $(
-                        if expected_tag == value.nanbox.tag() {
-                            return $enum_name::$field(value.nanbox.unpack());
+                        if expected_tag == value.tag() {
+                            return $enum_name::$field(value.unpack());
                         }
                         expected_tag += 1;
                     )*
-                    debug_assert!(false, "Unexpected tag {}", value.nanbox.tag());
+                    debug_assert!(false, "Unexpected tag {}", value.tag());
                     $crate::unreachable::unreachable()
                 }
             }
