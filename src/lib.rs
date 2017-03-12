@@ -90,6 +90,30 @@ impl NanBoxable for char {
     }
 }
 
+impl<'a, T> NanBoxable for &'a T {
+    unsafe fn from_nan_box(n: NanBox) -> Self {
+        &*(n.0 as *const T)
+    }
+
+    fn into_nan_box(self) -> NanBox {
+        NanBox(self as *const T as u64)
+    }
+}
+
+impl<'a, T> NanBoxable for Option<&'a T> {
+    unsafe fn from_nan_box(n: NanBox) -> Self {
+        (n.0 as *const T).as_ref()
+    }
+
+    fn into_nan_box(self) -> NanBox {
+        use std::ptr::null;
+        (match self {
+            Some(p) => p as *const T,
+            None => null(),
+        }).into_nan_box()
+    }
+}
+
 macro_rules! impl_array {
     ($($typ: ty)+) => {
         $(
