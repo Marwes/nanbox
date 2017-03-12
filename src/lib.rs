@@ -108,9 +108,10 @@ impl<'a, T> NanBoxable for Option<&'a T> {
     fn into_nan_box(self) -> NanBox {
         use std::ptr::null;
         (match self {
-            Some(p) => p as *const T,
-            None => null(),
-        }).into_nan_box()
+                Some(p) => p as *const T,
+                None => null(),
+            })
+            .into_nan_box()
     }
 }
 
@@ -179,7 +180,9 @@ impl NanBox {
     pub unsafe fn new<T>(tag: u8, value: T) -> NanBox
         where T: NanBoxable
     {
-        debug_assert!(tag < 1 << 4, "Nanboxes must have tags smaller than {}", 1 << 4);
+        debug_assert!(tag < 1 << 4,
+                      "Nanboxes must have tags smaller than {}",
+                      1 << 4);
         value.pack_nan_box(tag)
     }
 
@@ -203,49 +206,66 @@ pub struct TypedNanBox<T> {
     _marker: PhantomData<T>,
 }
 
-impl<T> Copy for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + Copy {
+impl<T> Copy for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + Copy {}
 
-}
-
-impl<T> Clone for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + Clone {
+impl<T> Clone for TypedNanBox<T>
+    where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + Clone
+{
     fn clone(&self) -> Self {
-        T::from(TypedNanBox { nanbox: self.nanbox, _marker: PhantomData }).clone().into()
+        T::from(TypedNanBox {
+                nanbox: self.nanbox,
+                _marker: PhantomData,
+            })
+            .clone()
+            .into()
     }
 }
 
-impl<T> fmt::Debug for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + fmt::Debug + Clone {
+impl<T> fmt::Debug for TypedNanBox<T>
+    where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + fmt::Debug + Clone
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", T::from(self.clone()))
     }
 }
 
-impl<T> fmt::Display for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + fmt::Display + Clone {
+impl<T> fmt::Display for TypedNanBox<T>
+    where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + fmt::Display + Clone
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", T::from(self.clone()))
     }
 }
 
-impl<T> PartialEq for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + PartialEq<T> + Clone {
+impl<T> PartialEq for TypedNanBox<T>
+    where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + PartialEq<T> + Clone
+{
     fn eq(&self, other: &TypedNanBox<T>) -> bool {
         T::from(self.clone()) == T::from(other.clone())
     }
 }
 
-impl<T> Eq for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + Eq + Clone { }
+impl<T> Eq for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + Eq + Clone {}
 
-impl<T> PartialOrd for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + PartialOrd<T> + Clone {
+impl<T> PartialOrd for TypedNanBox<T>
+    where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + PartialOrd<T> + Clone
+{
     fn partial_cmp(&self, other: &TypedNanBox<T>) -> Option<Ordering> {
         T::from(self.clone()).partial_cmp(&T::from(other.clone()))
     }
 }
 
-impl<T> Ord for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + Ord + Clone {
+impl<T> Ord for TypedNanBox<T>
+    where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + Ord + Clone
+{
     fn cmp(&self, other: &TypedNanBox<T>) -> Ordering {
         T::from(self.clone()).cmp(&T::from(other.clone()))
     }
 }
 
-impl<T> From<T> for TypedNanBox<T> where T: From<TypedNanBox<T>> {
+impl<T> From<T> for TypedNanBox<T>
+    where T: From<TypedNanBox<T>>
+{
     fn from(value: T) -> TypedNanBox<T> {
         value.into()
     }
@@ -257,7 +277,7 @@ impl<T> TypedNanBox<T> {
     {
         TypedNanBox {
             nanbox: NanBox::new(tag, value),
-            _marker: PhantomData
+            _marker: PhantomData,
         }
     }
 
@@ -280,7 +300,6 @@ macro_rules! make_nanbox {
             $($field: ident ($typ: ty)),*
         }
     ) => {
-        
         $(#[$meta])*
         pub struct $name {
             value: $crate::TypedNanBox<$enum_name>,
@@ -394,7 +413,8 @@ mod tests {
                 return TestResult::discard();
             }
             unsafe {
-                TestResult::from_bool(NanBox::new(tag, Box::into_raw(Box::new(v))).tag() == tag as u32)
+                let nanbox = NanBox::new(tag, Box::into_raw(Box::new(v)));
+                TestResult::from_bool(nanbox.tag() == tag as u32)
             }
         }
     }
@@ -416,10 +436,10 @@ mod tests {
                    Variant::Pointer(3000 as *mut ()));
         assert_eq!(Value::from(3.14).into_variant(), Variant::Float(3.14));
 
-        let array = [1,2,3,4,5,6];
+        let array = [1, 2, 3, 4, 5, 6];
         assert_eq!(Value::from(array).into_variant(), Variant::Array(array));
 
-        let array = [255,255,255,255,255,255];
+        let array = [255, 255, 255, 255, 255, 255];
         assert_eq!(Value::from(array).into_variant(), Variant::Array(array));
     }
 
