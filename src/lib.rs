@@ -80,6 +80,16 @@ macro_rules! impl_cast {
 
 impl_cast!{ u8 u16 u32 i8 i16 i32 }
 
+impl NanBoxable for char {
+    unsafe fn from_nan_box(n: NanBox) -> char {
+        std::char::from_u32_unchecked(n.0 as u32)
+    }
+
+    fn into_nan_box(self) -> NanBox {
+        NanBox(self as u64)
+    }
+}
+
 macro_rules! impl_array {
     ($($typ: ty)+) => {
         $(
