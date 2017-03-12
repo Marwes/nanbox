@@ -1,7 +1,9 @@
 #[doc(hidden)]
 pub extern crate unreachable;
 
+use std::cmp::Ordering;
 use std::fmt;
+use std::marker::PhantomData;
 use std::mem;
 
 const TAG_SHIFT: u64 = 48;
@@ -161,6 +163,70 @@ impl NanBox {
     }
 }
 
+pub struct TypedNanBox<T> {
+    nanbox: NanBox,
+    _marker: PhantomData<T>,
+}
+
+impl<T> Copy for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + Copy {
+
+}
+
+impl<T> Clone for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + Clone {
+    fn clone(&self) -> Self {
+        T::from(TypedNanBox { nanbox: self.nanbox, _marker: PhantomData }).clone().into()
+    }
+}
+
+impl<T> fmt::Debug for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + fmt::Debug + Clone {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", T::from(self.clone()))
+    }
+}
+
+impl<T> fmt::Display for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + fmt::Display + Clone {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", T::from(self.clone()))
+    }
+}
+
+impl<T> PartialEq for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + PartialEq<T> + Clone {
+    fn eq(&self, other: &TypedNanBox<T>) -> bool {
+        T::from(self.clone()) == T::from(other.clone())
+    }
+}
+
+impl<T> Eq for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + Eq + Clone { }
+
+impl<T> PartialOrd for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + PartialOrd<T> + Clone {
+    fn partial_cmp(&self, other: &TypedNanBox<T>) -> Option<Ordering> {
+        T::from(self.clone()).partial_cmp(&T::from(other.clone()))
+    }
+}
+
+impl<T> Ord for TypedNanBox<T> where T: From<TypedNanBox<T>> + Into<TypedNanBox<T>> + Ord + Clone {
+    fn cmp(&self, other: &TypedNanBox<T>) -> Ordering {
+        T::from(self.clone()).cmp(&T::from(other.clone()))
+    }
+}
+
+impl<T> From<T> for TypedNanBox<T> where T: From<TypedNanBox<T>> {
+    fn from(value: T) -> TypedNanBox<T> {
+        value.into()
+    }
+}
+
+impl<T> TypedNanBox<T> {
+    pub unsafe fn new<U>(tag: u8, value: U) -> TypedNanBox<T>
+        where U: NanBoxable
+    {
+        TypedNanBox {
+            nanbox: NanBox::new(tag, value),
+            _marker: PhantomData
+        }
+    }
+}
+
 macro_rules! make_nanbox {
     (
         $(#[$meta:meta])*
@@ -171,8 +237,7 @@ macro_rules! make_nanbox {
         
         $(#[$meta])*
         pub struct $name {
-            _marker: ::std::marker::PhantomData<($($typ),*)>,
-            value: $crate::NanBox,
+            value: TypedNanBox<$enum_name>,
         }
 
         $(#[$meta])*
@@ -198,8 +263,7 @@ macro_rules! make_nanbox {
                     $(
                         if let $enum_name::$field(value) = value {
                             return $name {
-                                _marker: ::std::marker::PhantomData,
-                                value: $crate::NanBox::new(tag, value)
+                                value: $crate::TypedNanBox::new(tag, value)
                             };
                         }
                         tag += 1;
@@ -209,18 +273,24 @@ macro_rules! make_nanbox {
             }
         }
 
-        impl Into<$enum_name> for $name {
-            fn into(self) -> $enum_name {
+        impl From<$name> for $enum_name {
+            fn from(value: $name) -> $enum_name {
+                value.value.into()
+            }
+        }
+
+        impl From<TypedNanBox<$enum_name>> for $enum_name {
+            fn from(value: TypedNanBox<$enum_name>) -> $enum_name {
                 #[allow(unused_assignments)]
                 unsafe {
                     let mut expected_tag = 0;
                     $(
-                        if expected_tag == self.value.tag() {
-                            return $enum_name::$field(self.value.unpack());
+                        if expected_tag == value.nanbox.tag() {
+                            return $enum_name::$field(value.nanbox.unpack());
                         }
                         expected_tag += 1;
                     )*
-                    debug_assert!(false, "Unexpected tag {}", self.value.tag());
+                    debug_assert!(false, "Unexpected tag {}", value.nanbox.tag());
                     $crate::unreachable::unreachable()
                 }
             }
@@ -284,7 +354,7 @@ mod tests {
     }
 
     make_nanbox!{
-        #[derive(Debug, PartialEq)]
+        #[derive(Clone, Debug, PartialEq)]
         pub enum Value, Variant {
             Float(f64),
             Int(i32),
