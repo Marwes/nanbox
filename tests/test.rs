@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate nanbox;
 
-make_nanbox!{
+unsafe_make_nanbox!{
     pub enum Value, Variant {
         Float(f64),
         Byte(u8),
