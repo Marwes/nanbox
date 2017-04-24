@@ -1,3 +1,6 @@
+//! Defines the `make_nanbox` macro which defines a type which packs values of different types
+//! into the unused space of the NaN representation of `f64`.
+
 #[doc(hidden)]
 pub extern crate unreachable;
 
@@ -108,9 +111,9 @@ impl<'a, T> NanBoxable for Option<&'a T> {
     fn into_nan_box(self) -> NanBox {
         use std::ptr::null;
         (match self {
-                Some(p) => p as *const T,
-                None => null(),
-            })
+                 Some(p) => p as *const T,
+                 None => null(),
+             })
             .into_nan_box()
     }
 }
@@ -213,11 +216,11 @@ impl<T> Clone for TypedNanBox<T>
 {
     fn clone(&self) -> Self {
         T::from(TypedNanBox {
-                nanbox: self.nanbox,
-                _marker: PhantomData,
-            })
-            .clone()
-            .into()
+                    nanbox: self.nanbox,
+                    _marker: PhantomData,
+                })
+                .clone()
+                .into()
     }
 }
 
@@ -292,6 +295,34 @@ impl<T> TypedNanBox<T> {
     }
 }
 
+/// Creates an `enum` which is packed into the signaling NaN representation of `f64`.
+///
+/// Some limitations apply to make this work in a safe manner.
+///
+/// * The first and only the first variant must hold a `f64`.
+/// * There must be 8 or fewer variants in the defined enum (this is only checked with
+///   `debug_assert!`)
+/// * Pointers stored in a nanbox must only use the lower 48 bits (checked via `debug_assert!` only).
+///
+/// ```
+/// #[macro_use]
+/// extern crate nanbox;
+///
+/// // Creates one `nanbox` type called `Value` and one normal enum called `Variant`.
+/// // `From` implementations are generated to converted between these two types as well as `From`
+/// // implementation for each of the types in the match arms (`From<f64>` etc).
+/// make_nanbox!{
+///     pub enum Value, Variant {
+///         Float(f64),
+///         Byte(u8),
+///         Int(i32),
+///         Pointer(*mut Value)
+///     }
+/// }
+///
+/// # fn main() { }
+///
+/// ```
 #[macro_export]
 macro_rules! make_nanbox {
     (
