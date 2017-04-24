@@ -5,6 +5,7 @@ authors = ["Markus Westerlind <marwes91@gmail.com>"]
 
 description = "NaN boxing implementation"
 license = "MIT"
+readme = "README.md"
 repository = "https://github.com/Marwes/nanbox"
 documentation = "https://docs.rs/crate/nanbox"
 
