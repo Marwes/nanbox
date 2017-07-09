@@ -1,4 +1,4 @@
-//! Defines the `unsafe_make_nanbox` macro which defines a type which packs values of different types
+//! Defines the `make_nanbox` macro which defines a type which packs values of different types
 //! into the unused space of the NaN representation of `f64`.
 
 #[doc(hidden)]
@@ -311,8 +311,8 @@ impl<T> TypedNanBox<T> {
 /// // Creates one `nanbox` type called `Value` and one normal enum called `Variant`.
 /// // `From` implementations are generated to converted between these two types as well as `From`
 /// // implementation for each of the types in the match arms (`From<f64>` etc).
-/// unsafe_make_nanbox!{
-///     pub enum Value, Variant {
+/// make_nanbox!{
+///     pub unsafe enum Value, Variant {
 ///         Float(f64),
 ///         Byte(u8),
 ///         Int(i32),
@@ -324,10 +324,10 @@ impl<T> TypedNanBox<T> {
 ///
 /// ```
 #[macro_export]
-macro_rules! unsafe_make_nanbox {
+macro_rules! make_nanbox {
     (
         $(#[$meta:meta])*
-        pub enum $name: ident, $enum_name: ident {
+        pub unsafe enum $name: ident, $enum_name: ident {
             $($field: ident ($typ: ty)),*
         }
     ) => {
@@ -450,9 +450,9 @@ mod tests {
         }
     }
 
-    unsafe_make_nanbox!{
+    make_nanbox!{
         #[derive(Clone, Debug, PartialEq)]
-        pub enum Value, Variant {
+        pub unsafe enum Value, Variant {
             Float(f64),
             Int(i32),
             Pointer(*mut ()),
