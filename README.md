@@ -1,4 +1,5 @@
 # Nanbox
+[![Docs](https://docs.rs/nanbox/badge.svg)](https://docs.rs/nanbox)
 
 A Rust crate which defines a macro which generates a safe* [nanboxed type][].
 
